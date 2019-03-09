@@ -1,11 +1,13 @@
 /**
  * Студент группы АПО-13 Юнусов Нозимжон
  * */
-
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+
 
 // =============================== MAP
 
@@ -16,7 +18,8 @@ typedef struct dict_t_struct {
 } dict_t;
 
 dict_t **dictAlloc(void) {
-    return malloc(sizeof(dict_t));
+//    return malloc(sizeof(dict_t));
+    return calloc(1, sizeof(dict_t));
 }
 
 void dictDealloc(dict_t **dict) {
@@ -113,17 +116,15 @@ int runParser();
 
 bool parseLogicalExpression();
 
-void removeSpaces(char *);
-
-int checkLineType(char *);
+//int checkLineType(char *);
 
 bool isExpressionValid(char *);
 
 bool isAssignmentValid(char *);
 
-bool calcLogicalExpression(bool *, char *, int);
+//bool calcLogicalExpression(bool *, char *, int);
 
-bool execCommand(bool, bool, int);
+//bool execCommand(bool, bool, int);
 
 int getPriority(int);
 
@@ -133,7 +134,7 @@ bool isLowLetter(char);
 
 bool isOperator(char *, int, int);
 
-void removeRedundantSpaces(char *);
+void removeRedundantSpaces(char *, bool);
 
 bool isVarName(char *, int, int);
 
@@ -157,7 +158,6 @@ enum Operators {
 };
 
 typedef struct Node {
-//    bool isIdentifier;
     enum Operators operator;
     bool value;
     struct Node *primaryChild;
@@ -166,7 +166,9 @@ typedef struct Node {
 
 bool resolveNode(node_t *);
 
-bool insertNode(node_t **rootNode, node_t *newNode);
+void insertNode(node_t **rootNode, node_t *newNode);
+
+int getOperatorType(char *line, int, int);
 
 int main(void) {
     int errorCode = runParser();
@@ -207,9 +209,9 @@ int runParser() {
         return -1;
     }
 
-    removeSpaces(line1);
-    removeSpaces(line2);
-    removeRedundantSpaces(line3);
+    removeRedundantSpaces(line1, true);
+    removeRedundantSpaces(line2, true);
+    removeRedundantSpaces(line3, false);
 
     if (!isAssignmentValid(line1)
         || !isAssignmentValid(line2)
@@ -245,6 +247,49 @@ int runParser() {
     return 0;
 };
 
+void addVar(dict_t **dict, char *assignLine){
+
+    if (strlen(assignLine) <= 1){
+        return;
+    }
+    int assignOperatorIndex = findElemInArr(assignLine, '=');
+
+
+    char *var1 = NULL;
+//           var1 = malloc((size_t) assignOperatorIndex);
+           var1 = calloc(1, (size_t) assignOperatorIndex + 1);
+    strncpy(var1, assignLine, (size_t) assignOperatorIndex);
+    bool val = false;
+    if (isTrueStr(assignLine, assignOperatorIndex + 1)) {
+        val = true;
+    } else if (isFalseStr(assignLine, assignOperatorIndex + 1)) {
+        val = false;
+    }
+    addItem(dict, var1, val);
+
+    //        printf("%s \n", var1);
+//        printf("%d \n", getItem(*dict, var1));
+
+    free(var1);
+
+}
+
+void freeNodeTree(node_t *rootNode){
+    if (rootNode != NULL){
+        freeNodeTree(rootNode->primaryChild);
+        free(rootNode->secondaryChild);
+        free(rootNode);
+    }
+}
+
+void freeDictTree(dict_t *dict){
+    if(dict != NULL){
+        freeDictTree(dict->next);
+        free(dict->key);
+        free(dict);
+    }
+}
+
 bool parseLogicalExpression(bool *isError,
                             char *assignment1, int size1,
                             char *assignment2, int size2,
@@ -252,40 +297,10 @@ bool parseLogicalExpression(bool *isError,
 
     dict_t **dict = dictAlloc();
 
-    int assignOperatorIndex = findElemInArr(assignment1, '=');
-    char *var1 = malloc((size_t) assignOperatorIndex);
-    strncpy(var1, assignment1, (size_t) assignOperatorIndex);
-    bool val = false;
-    if (isTrueStr(assignment1, assignOperatorIndex + 1)) {
-        val = true;
-    } else if (isFalseStr(assignment1, assignOperatorIndex + 1)) {
-        val = false;
-    }
-    addItem(dict, var1, val);
+    addVar(dict, assignment1);
+    addVar(dict, assignment2);
 
-    free(var1);
-
-    assignOperatorIndex = findElemInArr(assignment2, '=');
-    char *var2 = malloc((size_t) assignOperatorIndex);
-    strncpy(var2, assignment2, (size_t) assignOperatorIndex);
-    val = false;
-    if (isTrueStr(assignment2, assignOperatorIndex + 1)) {
-        val = true;
-    } else if (isFalseStr(assignment2, assignOperatorIndex + 1)) {
-        val = false;
-    }
-    addItem(dict, var2, val);
-
-    free(var2);
-
-//        printf("%s \n", var1);
-//        printf("%d \n", getItem(*dict, var1));
-//        printf("%s \n", var2);
-//        printf("%d \n", getItem(*dict, var2));
-
-
-    node_t *rootNode = NULL; // =  malloc(sizeof(node_t));
-    int bracesCount = 0;
+    node_t *rootNode = NULL;
 
     int i = 0;
     while (line[i] != '\0' && line[i] != '\n' && line[i] != ';') {
@@ -294,25 +309,14 @@ bool parseLogicalExpression(bool *isError,
 
 
         if (line[i] == '(') {
-            node_t *newNode = malloc(sizeof(node_t));
+            node_t *newNode = NULL;
+            newNode = calloc(1, sizeof(node_t));
+//            newNode = malloc(sizeof(node_t));
             newNode->operator = Brackets;
-            bracesCount++;
 
             insertNode(&rootNode, newNode);
 
-//            if (rootNode == NULL) {
-//                rootNode = newNode;
-//                prevNode = rootNode;
-//            } else if (currentNode == NULL) {
-//                currentNode = newNode;
-//                prevNode->primaryChild = currentNode;
-//            } else {
-//                prevNode = currentNode;
-//                currentNode = newNode;
-//                prevNode->primaryChild = currentNode;
-//            }
         } else if (line[i] == ')') {
-            bracesCount--;
             rootNode->operator = ClosedBrackets;
         } else if (line[i] != ' ') {
             tokenStart = i;
@@ -326,81 +330,50 @@ bool parseLogicalExpression(bool *isError,
                 tokenEnd++;
             }
 
-            node_t *newNode = malloc(sizeof(node_t));
+            node_t *newNode = NULL;
+            newNode = calloc(1, sizeof(node_t));
+//            newNode = malloc(sizeof(node_t));
 
-            if (isOperator(line, tokenStart, -1)) {
-//                newNode->isIdentifier = false;
-                if (isNotStr(line, tokenStart)) {
+            switch (getOperatorType(line, tokenStart, -1)) {
+                case Not:
                     newNode->operator = Not;
-
-                    insertNode(&rootNode, newNode);
-
-//                    if (rootNode == NULL) {
-//                        rootNode = newNode;
-//                        prevNode = newNode;
-//                    } else if (currentNode == NULL) {
-//                        currentNode = newNode;
-//                        prevNode->primaryChild = currentNode;
-//                    } else {
-//                        prevNode = currentNode;
-//                        currentNode = newNode;
-//                        prevNode->primaryChild = currentNode;
-//                    }
-                } else if (isAndStr(line, tokenStart)) {
+                    break;
+                case And:
                     newNode->operator = And;
-                    insertNode(&rootNode, newNode);
-//                    if (getPriority(newNode->operator) < getPriority(currentNode->operator)) {
-//                        newNode->primaryChild = currentNode;
-//                        currentNode = newNode;
-//                        prevNode->primaryChild = currentNode;
-//                    } else {
-//
-//                    }
-                } else if (isXorStr(line, tokenStart)) {
-                    newNode->operator = Xor;
-                } else if (isOrStr(line, tokenStart)) {
+                    break;
+                case Or:
                     newNode->operator = Or;
-                    insertNode(&rootNode, newNode);
-//                    if (getPriority(newNode->operator) < getPriority(currentNode->operator)) {
-//                        newNode->primaryChild = currentNode;
-//                        currentNode = newNode;
-//                    } else {
-//
-//                    }
-                }
-            } else {
-//                newNode->isIdentifier = true;
-                newNode->operator = Identifier;
-                int count = (tokenEnd - tokenStart) + 1;
-                char *varName = malloc((size_t) count);
-                strncpy(varName, line + tokenStart, (size_t) count);
-                if (isTrueStr(line, tokenStart)) {
-                    newNode->value = true;
-                } else if(isFalseStr(line, tokenStart)) {
-                    newNode->value = false;
-                } else {
-                    newNode->value = getItem(*dict, varName);
-                }
-
-                insertNode(&rootNode, newNode);
-                free(varName);
-
-//                if (rootNode == NULL) {
-//                    rootNode = newNode;
-//                    prevNode = newNode;
-//                } else if (currentNode == NULL) {
-//                    rootNode->secondaryChild = newNode;
-//                } else {
-//                    currentNode->secondaryChild = newNode;
-//                }
+                    break;
+                case Xor:
+                    newNode->operator = Xor;
+                    break;
+                case Identifier:
+                    newNode->operator = Identifier;
+                    int count = (tokenEnd - tokenStart) + 1;
+                    char *varName = NULL;
+                            varName = calloc(1, (size_t) count + 1);
+//                            varName = malloc((size_t) count);
+                    strncpy(varName, line + tokenStart, (size_t) count);
+                    if (isTrueStr(line, tokenStart)) {
+                        newNode->value = true;
+                    } else if(isFalseStr(line, tokenStart)) {
+                        newNode->value = false;
+                    } else {
+                        newNode->value = getItem(*dict, varName);
+                    }
+                    free(varName);
+                    break;
+                default:
+                    newNode->operator = Identifier;
+                    if (isTrueStr(line, tokenStart)) {
+                        newNode->value = true;
+                    } else if(isFalseStr(line, tokenStart)) {
+                        newNode->value = false;
+                    }
+                    break;
 
             }
-
-//                if (line[tokenEnd] != ')') {
-//                    i = tokenEnd;
-//                } else {
-//                    i = tokenEnd-1;
-//                }
+            insertNode(&rootNode, newNode);
 
             i = tokenEnd;
         }
@@ -408,116 +381,74 @@ bool parseLogicalExpression(bool *isError,
         i++;
     }
 
-//        free(rootNode);
-
     bool result = resolveNode(rootNode);
 
-    printf("\n");
-    printf("result %d \n", result);
-    printf("bracesCount %d \n", bracesCount);
+    freeNodeTree(rootNode);
 
+//    printf("\n");
+//    printf("result %d \n", result);
+
+    freeDictTree(*dict);
     dictDealloc(dict);
 
     return result;
 };
 
-bool insertNode(node_t **rootNode1, node_t *newNode) {
+void insertNode(node_t **rootNode1, node_t *newNode) {
     node_t *rootNode = *rootNode1;
+    node_t *node = NULL;
+    node = rootNode;
 
-    if (rootNode == NULL) {
-        rootNode = newNode;
-    } else if (rootNode->operator == Brackets) {
+    if (rootNode != NULL && rootNode->operator == Brackets) {
+        node = rootNode->primaryChild;
+    }
 
-        node_t *node = rootNode->primaryChild; // todo: Правильно ли я делаю операции с указателями? не теряю ли данные. Нужно использовать указатель на указатель?
 
-        if (node == NULL) {
-            node = newNode;
-        } else if (newNode->operator == Identifier) {
+    if (!node) {
+        node = newNode;
+    } else if (newNode->operator == Identifier) {
 
-            if (node->primaryChild == NULL) {
-                node->primaryChild = newNode;
-            } else {
-                node->secondaryChild = newNode;
-            }
+        if (node->primaryChild == NULL) {
+            node->primaryChild = newNode;
         } else {
-            if (node->operator == Identifier) {
+            node->secondaryChild = newNode;
+        }
+    } else {
+        if (node->operator == Identifier) {
+
+            newNode->primaryChild = node;
+            node = newNode;
+        } else {
+            if (getPriority(node->operator) > getPriority(newNode->operator)) {
 
                 newNode->primaryChild = node;
                 node = newNode;
-                newNode = NULL;
             } else {
-                if (getPriority(node->operator) > getPriority(newNode->operator)) {
 
-                    newNode->primaryChild = node;
-                    node = newNode;
-                    newNode = NULL;
+                if (node->primaryChild == NULL) {
+                    node->primaryChild = newNode;
                 } else {
-
-                    if (node->primaryChild == NULL) {
-                        node->primaryChild = newNode;
-                    } else {
-                        node->secondaryChild = newNode;
-                    }
+                    node->secondaryChild = newNode;
                 }
             }
-
         }
+
+    }
+
+    if (rootNode != NULL && rootNode->operator == Brackets) {
         rootNode->primaryChild = node;
     } else {
-
-        if (newNode->operator == Identifier) {
-
-            if (rootNode->primaryChild == NULL) {
-                rootNode->primaryChild = newNode;
-            } else {
-                rootNode->secondaryChild = newNode;
-            }
-        } else {
-            if (rootNode->operator == Identifier) {
-
-                newNode->primaryChild = rootNode;
-                rootNode = newNode;
-                newNode = NULL;
-            } else {
-                if (getPriority(rootNode->operator) > getPriority(newNode->operator)) {
-
-                    newNode->primaryChild = rootNode;
-                    rootNode = newNode;
-                    newNode = NULL;
-                } else {
-
-                    if (rootNode->primaryChild == NULL) {
-                        rootNode->primaryChild = newNode;
-                    } else {
-                        rootNode->secondaryChild = newNode;
-                    }
-                }
-            }
-
-        }
+        rootNode = node;
     }
+
     *rootNode1 = rootNode;
 }
 
 bool resolveNode(node_t *node) {
 
-//    printf("\n");
-//
-//    if (node->operator) {
-//        printf("operator %d\n", node->operator);
-//    }
-//    if (node->primaryChild) {
-//        printf("primaryChild operator %d\n", node->primaryChild->operator);
-//    }
-//    if (node->secondaryChild) {
-//        printf("secondaryChild operator %d\n", node->secondaryChild->operator);
-//    }
-//    printf("isIdentifier %d\n", node->isIdentifier);
-
-
-//    if (node->isIdentifier) {
-//        return node->value;
-//    }
+    if (node == NULL){
+        return false;
+    }
 
     bool r, l = false;
 
@@ -525,162 +456,264 @@ bool resolveNode(node_t *node) {
         case Identifier:
             return node->value;
         case Not:
-            printf("Not \n");
+//            printf("Not \n");
             return !resolveNode(node->primaryChild);
         case And:
-            printf("And \n");
+//            printf("And \n");
             r = resolveNode(node->secondaryChild);
             l = resolveNode(node->primaryChild);
             return r && l;
         case Or:
-            printf("Or \n");
+//            printf("Or \n");
             r = resolveNode(node->secondaryChild);
             l = resolveNode(node->primaryChild);
             return r || l;
         case Xor:
-            printf("Xor \n");
+//            printf("Xor \n");
             r = resolveNode(node->secondaryChild);
             l = resolveNode(node->primaryChild);
             return r ^ l;
         case Brackets:
         case ClosedBrackets:
-            printf("Brackets \n");
+//            printf("Brackets \n");
             return resolveNode(node->primaryChild);
     }
+    return false;
 }
 
 void freeIfNotNull(char *line) {
     if (line != NULL) free(line);
 };
 
-void removeSpaces(char *line) {
-    char *i = line;
-    char *j = line;
-
-    while (*j != 0) {
-        *i = *j++;
-        if (*i != ' ') i++;
-    }
-
-    *i = 0;
-};
-
-void removeRedundantSpaces(char *line) {
+void removeRedundantSpaces(char *line, bool removeAll) {
     char *i = line;
     char *j = line;
 
     while (*j != 0) {
         *i = *j;
         j++;
-        if (*i != ' ' || (*i == ' ' && *(i - 1) != ' ')) i++;
+        if (removeAll){
+            if (*i != ' ') i++;
+        } else {
+            if (*i != ' ' || (*i == ' ' && *(i - 1) != ' ')) i++; // leave only one space between chars
+        }
     }
 
     *i = 0;
-
 }
 
-bool isVarName(char *line, int firstIndex, int lastIndex) {
-    for (int i = firstIndex; i <= lastIndex; i++) {
-        if (isLowLetter(line[i]) == false) {
-            return false;
-        };
-    }
-    return true;
-};
+//int checkLineType(char *line) {
+//
+//};
 
-int checkLineType(char *line) {
-
-};
-
-// todo: add chekcc rules: "a a a ", "and and and", "a and and", "and not and", "a a and a", "and a and a"
+// todo: add check rules: "a a a ", "and and and", "a and and", "and not and", "a a and a", "and a and a"
 bool isExpressionValid(char *line) {
 
+//    return true;
+
+    size_t len = strlen(line);
+    if(len <= 1){
+        return true;
+    }
+
     int bracketsCount = 0;
-
-    int prevChar = 0;
-    int nextChar = 0;
-
-    int start, end = 0;
-
     int i = 0;
-    while (line[i] != '\0' && line[i] != '\n' && line[i] != ';') {
+    int tokenStart = 0;
+    int tokenEnd = 0;
 
-        switch (line[i]) {
-            case ' ':
-                while (line[i + 1] == ' ') {
-                    i++;
-                }
-                break;
-            case '(':
-                if (i != 0) {
-                    prevChar = i - 1;
-                    if (line[prevChar] == ' ') {
-                        prevChar--;
-                    }
-                    if (!isOperator(line, -1, prevChar)) {
-                        return false;
-                    }
-                }
-                bracketsCount++;
-                break;
-            case ')':
-                if (bracketsCount >= 1) {
-                    bracketsCount--;
-                } else {
+    int prevTokenStartIndex = 0;
+    int prevTokenEndIndex = 0;
+
+    while (line[i] != '\0' && line[i] != '\n' && line[i] != ';') {
+        tokenStart = i;
+        tokenEnd = i;
+
+
+        if (line[i] == '(') {
+            bracketsCount++;
+
+            if (i != 0 && prevTokenEndIndex !=0 && prevTokenStartIndex != 0) {
+                int operType = getOperatorType(line, prevTokenStartIndex, -1);
+                if(operType == -1 || operType == Identifier){
                     return false;
                 }
-                prevChar = i - 1;
-                nextChar = i + 1;
-                if (line[prevChar] == ' ') {
-                    prevChar--;
-                }
-                if (line[nextChar] == ' ') {
-                    nextChar++;
-                }
-                if (!isOperator(line, nextChar, -1) || isOperator(line, -1, prevChar)) {
+            }
+
+        } else if (line[i] == ')') {
+            bracketsCount--;
+
+            if (i != 0 && prevTokenEndIndex !=0 && prevTokenStartIndex != 0) {
+                int operType = getOperatorType(line, prevTokenStartIndex, -1);
+                if( operType != Identifier){
                     return false;
                 }
-                break;
-            default:
-                if (isLowLetter(line[i]) == false &&
-                    line[i] != 'T' &&
-                    line[i] != 'F') {
+            }
+
+        } else if (line[i] != ' ') {
+            tokenStart = i;
+            tokenEnd = i;
+            while (line[tokenEnd+1] != ' '
+                   && line[tokenEnd+1] != '('
+                   && line[tokenEnd+1] != ')'
+                   && line[tokenEnd+1] != '\0'
+                   && line[tokenEnd+1] != '\n'
+                   && line[tokenEnd+1] != ';') {
+                tokenEnd++;
+            }
+
+
+            switch (getOperatorType(line, tokenStart, -1)) {
+                case Not:
+                    // проверить на наличие переменной или константы после not
+                    if (i != 0 && prevTokenEndIndex !=0 && prevTokenStartIndex != 0) {
+                        int operType = getOperatorType(line, prevTokenStartIndex, -1);
+                        if(operType == Identifier
+                        || prevTokenStartIndex != prevTokenEndIndex){ // если не ( и не )
+                            return false;
+                        }
+                    }
+                    break;
+                case And:
+                    // валидные примеры
+                    // isdog and iscat
+                    // (...) and (...)
+                    // True and False
+                    // isdog and True, True and iscat
+                    // isdog and not iscat, isdog and not True
+                    // Слева не может быть оператора
+                    // справа может быть только опертор not
+                case Or:
+                case Xor:
+                    if (i != 0 && prevTokenEndIndex !=0 && prevTokenStartIndex != 0) {
+                        int operType = getOperatorType(line, prevTokenStartIndex, -1);
+                        if(operType != Identifier){
+                            return false;
+                        }
+                    }
+                    break;
+                case Identifier:
+                    // and isdog and
+                    // not isdog, not False, not isdog and
+                    // isdog isdog isdog
+                    //  с двух сторон не может быть переменной или константы
+                    if (i != 0 && prevTokenEndIndex !=0 && prevTokenStartIndex != 0) {
+                        int operType = getOperatorType(line, prevTokenStartIndex, -1);
+                        if(operType == Identifier
+                           || (operType == -1 && prevTokenStartIndex != prevTokenEndIndex)){ // если не ( и не )
+                            return false;
+                        }
+                    }
+                    break;
+                default:
+                    // если слово не является ни оператором или переменной или константой
                     return false;
-                } else {
-                    start = i;
-                    end = i;
-                    while ((line[start - 1] != ' '
-                            && line[start - 1] != '('
-                            && line[start - 1] != ')')
-                           && start > 0) {
-                        start--;
-                    }
-                    while (
-                            (
-                                    line[end + 1] != ' '
-                                    && line[end + 1] != '('
-                                    && line[end + 1] != ')'
-                            )
-                            &&
-                            (
-                                    line[end + 1] != '\0'
-                                    && line[end + 1] != '\n'
-                                    && line[end + 1] != ';'
-                            )
-                            ) {
-                        end++;
-                    }
-                    if (!isVarName(line, start, end)
-                        && !isTrueStr(line, start)
-                        && !isFalseStr(line, start)) {
-                        return false;
-                    }
-                }
-                break;
+                    break;
+
+            }
+
+            i = tokenEnd;
+            prevTokenStartIndex = tokenStart;
+            prevTokenEndIndex = tokenEnd;
         }
 
         i++;
     }
+
+//    int bracketsCount = 0;
+//
+//    int prevCharIndex = 0;
+//    int nextCharIndex = 0;
+//
+//    int start, end = 0;
+//
+//    int i = 0;
+//    while (line[i] != '\0' && line[i] != '\n' && line[i] != ';') {
+//
+//        switch (line[i]) {
+//            case ' ':
+//                while (line[i + 1] == ' ') {
+//                    i++;
+//                }
+//                break;
+//            case '(':
+//                if (i != 0) {
+//                    prevCharIndex = i - 1;
+//                    if (line[prevCharIndex] == ' ') {
+//                        prevCharIndex--;
+//                    }
+//                    int operType = getOperatorType(line, -1, prevCharIndex);
+//                    if(operType == -1 || operType == Identifier){
+//                        return false;
+//                    }
+////                    if (!isOperator(line, -1, prevChar)) {
+////                        return false;
+////                    }
+//                }
+//                bracketsCount++;
+//                break;
+//            case ')':
+//                if (bracketsCount >= 1) {
+//                    bracketsCount--;
+//                } else {
+//                    return false;
+//                }
+//                prevCharIndex = i - 1;
+//                nextCharIndex = i + 1;
+//                if (line[prevCharIndex] == ' ') {
+//                    prevCharIndex--;
+//                }
+//                if (line[nextCharIndex] == ' ') {
+//                    nextCharIndex++;
+//                }
+//                int operType = getOperatorType(line, nextCharIndex, -1);
+//                int operType2 = getOperatorType(line, -1, prevCharIndex);
+//                if(operType == -1 || operType == Identifier || operType2 == -1 || operType2 == Identifier ){
+//                    return false;
+//                }
+////                if (!isOperator(line, nextChar, -1) || isOperator(line, -1, prevChar)) {
+////                    return false;
+////                }
+//                break;
+//            default:
+//                if (isLowLetter(line[i]) == false &&
+//                    line[i] != 'T' &&
+//                    line[i] != 'F') {
+//                    return false;
+//                } else {
+//                    start = i;
+//                    end = i;
+//                    while ((line[start - 1] != ' '
+//                            && line[start - 1] != '('
+//                            && line[start - 1] != ')')
+//                           && start > 0) {
+//                        start--;
+//                    }
+//                    while (
+//                            (
+//                                    line[end + 1] != ' '
+//                                    && line[end + 1] != '('
+//                                    && line[end + 1] != ')'
+//                            )
+//                            &&
+//                            (
+//                                    line[end + 1] != '\0'
+//                                    && line[end + 1] != '\n'
+//                                    && line[end + 1] != ';'
+//                            )
+//                            ) {
+//                        end++;
+//                    }
+//                    if (!isVarName(line, start, end)
+//                        && !isTrueStr(line, start)
+//                        && !isFalseStr(line, start)) {
+//                        return false;
+//                    }
+//                }
+//                break;
+//        }
+//
+//        i++;
+//    }
 
     if (bracketsCount != 0) {
         return false;
@@ -718,84 +751,70 @@ bool isLowLetter(char character) {
     return (character >= 'a') && (character <= 'z');
 }
 
-bool isTrueStr(char *line, int firstIndex) {
-    if (line[firstIndex] == 'T' &&
-        line[firstIndex + 1] == 'r' &&
-        line[firstIndex + 2] == 'u' &&
-        line[firstIndex + 3] == 'e') {
-        return true;
+bool compareStr(char *line, int firstIndex, char *str){
+    size_t len = strlen(str);
+    for (size_t i = 0; i < len; i++ ){
+        if (line[firstIndex + i] != str[i]) {
+            return false;
+        }
     }
-    return false;
+    return true;
 }
+
+bool isTrueStr(char *line, int firstIndex) {
+    return compareStr(line, firstIndex, "True");
+}
+
 
 bool isFalseStr(char *line, int firstIndex) {
-    if (line[firstIndex] == 'F' &&
-        line[firstIndex + 1] == 'a' &&
-        line[firstIndex + 2] == 'l' &&
-        line[firstIndex + 3] == 's' &&
-        line[firstIndex + 4] == 'e') {
-        return true;
-    }
-    return false;
+    return compareStr(line, firstIndex, "False");
 }
 
-bool isNotStr(char *line, int firstIndex) {
-    if (line[firstIndex] == 'n' &&
-        line[firstIndex + 1] == 'o' &&
-        line[firstIndex + 2] == 't') {
-        return true;
-    }
-    return false;
-}
 
-bool isOrStr(char *line, int firstIndex) {
-    if (line[firstIndex] == 'o' &&
-        line[firstIndex + 1] == 'r') {
-        return true;
+bool isVarName(char *line, int firstIndex, int lastIndex) {
+    for (int i = firstIndex; i <= lastIndex; i++) {
+        if (isLowLetter(line[i]) == false) {
+            return false;
+        };
     }
-    return false;
-}
+    return true;
+};
 
-bool isXorStr(char *line, int firstIndex) {
-    if (line[firstIndex] == 'x' &&
-        line[firstIndex + 1] == 'o' &&
-        line[firstIndex + 2] == 'r') {
-        return true;
-    }
-    return false;
-}
+int getOperatorType(char *line, int firstIndex, int lastIndex){
 
-bool isAndStr(char *line, int firstIndex) {
-    if (line[firstIndex] == 'a' &&
-        line[firstIndex + 1] == 'n' &&
-        line[firstIndex + 2] == 'd') {
-        return true;
-    }
-    return false;
-}
-
-bool isOperator(char *line, int firstIndex, int lastIndex) {
-    if (firstIndex != -1) {
-        if (isNotStr(line, firstIndex)
-            || isAndStr(line, firstIndex)
-            || isOrStr(line, firstIndex)
-            || isXorStr(line, firstIndex)) {
-            return true;
+    if (lastIndex != -1) {
+        if (compareStr(line, lastIndex - 2, "not")){
+            return Not;
+        } else if (compareStr(line, lastIndex - 2, "and")){
+            return And;
+        } else if (compareStr(line, lastIndex - 1, "or")){
+            return Or;
+        } else if (compareStr(line, lastIndex - 2, "xor")){
+            return Xor;
         }
-    } else if (lastIndex != -1) {
-        if (isNotStr(line, lastIndex - 2)
-            || isAndStr(line, lastIndex - 2)
-            || isOrStr(line, lastIndex - 1)
-            || isXorStr(line, lastIndex - 2)) {
-            return true;
+    } else {
+        if (compareStr(line, firstIndex, "not")){
+            return Not;
+        } else if (compareStr(line, firstIndex, "and")){
+            return And;
+        } else if (compareStr(line, firstIndex, "or")){
+            return Or;
+        } else if (compareStr(line, firstIndex, "xor")){
+            return Xor;
+        } else if (isVarName(line, firstIndex, lastIndex) || isTrueStr(line, firstIndex) || isFalseStr(line, firstIndex)){
+            return Identifier;
         }
     }
 
-
-    return false;
+    return -1;
 }
 
 bool isAssignmentValid(char *line) {
+
+    size_t len = strlen(line);
+    if(len <= 1){
+        return true;
+    }
 
     int assignOperatorIndex = findElemInArr(line, '=');
 
@@ -807,12 +826,6 @@ bool isAssignmentValid(char *line) {
         return false;
     }
 
-//    for(int i = 0; i < assignOperatorIndex; i++){
-//        if(isLowLetter(line[i]) == false){
-//            return false;
-//        };
-//    }
-
     if (!(isTrueStr(line, assignOperatorIndex + 1)
           || isFalseStr(line, assignOperatorIndex + 1))) {
 
@@ -820,11 +833,11 @@ bool isAssignmentValid(char *line) {
     }
 
     return true;
-};;
+}
 
-bool execCommand(bool a, bool b, int operator) {
-
-};
+//bool execCommand(bool a, bool b, int operator) {
+//
+//};
 
 /**
  * Get operator's priority
@@ -845,10 +858,11 @@ int getPriority(int operator) {
         case ClosedBrackets:
             return 4;
         default:
+            return -1;
             break;
     }
 };
 
-bool calcLogicalExpression(bool *isError, char *expression, int size) {
-
-};
+//bool calcLogicalExpression(bool *isError, char *expression, int size) {
+//
+//};
