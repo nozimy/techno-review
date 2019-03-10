@@ -18,7 +18,6 @@ typedef struct dict_t_struct {
 } dict_t;
 
 dict_t **dictAlloc(void) {
-//    return malloc(sizeof(dict_t));
     return calloc(1, sizeof(dict_t));
 }
 
@@ -122,17 +121,11 @@ bool isExpressionValid(char *);
 
 bool isAssignmentValid(char *);
 
-//bool calcLogicalExpression(bool *, char *, int);
-
-//bool execCommand(bool, bool, int);
-
 int getPriority(int);
 
 void freeIfNotNull(char *);
 
 bool isLowLetter(char);
-
-bool isOperator(char *, int, int);
 
 void removeRedundantSpaces(char *, bool);
 
@@ -143,14 +136,6 @@ bool isTrueStr(char *, int);
 bool isFalseStr(char *, int);
 
 int findElemInArr(char *, char);
-
-bool isNotStr(char *, int);
-
-bool isAndStr(char *, int);
-
-bool isXorStr(char *, int);
-
-bool isOrStr(char *, int);
 
 
 enum Operators {
@@ -198,34 +183,45 @@ int runParser() {
     size_t line3Length = 0;
 
     ssize_t charNum1 = getline(&line1, &line1Length, stdin);
-    ssize_t charNum2 = getline(&line2, &line2Length, stdin);
-    ssize_t charNum3 = getline(&line3, &line3Length, stdin);
-
-    if (line1 == NULL || line2 == NULL || line3 == NULL
-        || charNum1 == -1 || charNum2 == -1 || charNum3 == -1) {
-        freeIfNotNull(line1);
-        freeIfNotNull(line2);
-        freeIfNotNull(line3);
-        return -1;
+//    printf("%s \n", line1);
+//    printf("%c \n", line1[charNum1-2]);
+//    printf("%zu \n", line1Length);
+//    printf("%zd \n", charNum1);
+    if (line1[charNum1-2] == ';') {
+        ssize_t charNum2 = getline(&line2, &line2Length, stdin);
+        if (line1[charNum2-2] == ';') {
+            ssize_t charNum3 = getline(&line3, &line3Length, stdin); // todo: not used - remove warning
+        }
     }
 
-    removeRedundantSpaces(line1, true);
-    removeRedundantSpaces(line2, true);
-    removeRedundantSpaces(line3, false);
 
-    if (!isAssignmentValid(line1)
-        || !isAssignmentValid(line2)
-        || !isExpressionValid(line3)) {
 
-        freeIfNotNull(line1);
-        freeIfNotNull(line2);
-        freeIfNotNull(line3);
-        return -1;
-    }
+//    if (line1 == NULL || line2 == NULL || line3 == NULL
+//        || charNum1 == -1 || charNum2 == -1 || charNum3 == -1) {
+//        freeIfNotNull(line1);
+//        freeIfNotNull(line2);
+//        freeIfNotNull(line3);
+//        return -1;
+//    }
+
+
+//    removeRedundantSpaces(line1, true);
+//    removeRedundantSpaces(line2, true);
+//    removeRedundantSpaces(line3, false);
+//
+//    if (!isAssignmentValid(line1)
+//        || !isAssignmentValid(line2)
+//        || !isExpressionValid(line3)) {
+//
+//        freeIfNotNull(line1);
+//        freeIfNotNull(line2);
+//        freeIfNotNull(line3);
+//        return -1;
+//    }
 
     bool isError = false;
-    bool result = parseLogicalExpression(&isError, line1, (int) charNum1,
-                                         line2, (int) charNum2, line3, (int) charNum3);
+    bool result = parseLogicalExpression(&isError, line1,
+                                         line2, line3);
 
     if (isError) {
         freeIfNotNull(line1);
@@ -256,7 +252,6 @@ void addVar(dict_t **dict, char *assignLine){
 
 
     char *var1 = NULL;
-//           var1 = malloc((size_t) assignOperatorIndex);
            var1 = calloc(1, (size_t) assignOperatorIndex + 1);
     strncpy(var1, assignLine, (size_t) assignOperatorIndex);
     bool val = false;
@@ -266,9 +261,6 @@ void addVar(dict_t **dict, char *assignLine){
         val = false;
     }
     addItem(dict, var1, val);
-
-    //        printf("%s \n", var1);
-//        printf("%d \n", getItem(*dict, var1));
 
     free(var1);
 
@@ -291,14 +283,47 @@ void freeDictTree(dict_t *dict){
 }
 
 bool parseLogicalExpression(bool *isError,
-                            char *assignment1, int size1,
-                            char *assignment2, int size2,
-                            char *line, int size3) {
+                            char *line1,
+                            char *line2,
+                            char *line) {
+
+//    *isError = true;
 
     dict_t **dict = dictAlloc();
 
-    addVar(dict, assignment1);
-    addVar(dict, assignment2);
+//    removeRedundantSpaces(line1, false);
+    if(isAssignmentValid(line1)){
+        addVar(dict, line1);
+    } else {
+        removeRedundantSpaces(line1, false);
+        if (isExpressionValid(line1)){
+            line = line1;
+        } else {
+            *isError = true;
+        }
+    }
+
+//    removeRedundantSpaces(line2, false);
+    if(isAssignmentValid(line2)){
+        addVar(dict, line2);
+    } else {
+        removeRedundantSpaces(line2, false);
+        if (isExpressionValid(line2)){
+            line = line2;
+        } else {
+            *isError = true;
+        }
+    }
+
+
+    removeRedundantSpaces(line, false);
+    if (!isExpressionValid(line)){
+        *isError = true;
+        return false;
+    }
+
+//    addVar(dict, line1);
+//    addVar(dict, line2);
 
     node_t *rootNode = NULL;
 
@@ -311,7 +336,6 @@ bool parseLogicalExpression(bool *isError,
         if (line[i] == '(') {
             node_t *newNode = NULL;
             newNode = calloc(1, sizeof(node_t));
-//            newNode = malloc(sizeof(node_t));
             newNode->operator = Brackets;
 
             insertNode(&rootNode, newNode);
@@ -332,7 +356,6 @@ bool parseLogicalExpression(bool *isError,
 
             node_t *newNode = NULL;
             newNode = calloc(1, sizeof(node_t));
-//            newNode = malloc(sizeof(node_t));
 
             switch (getOperatorType(line, tokenStart, -1)) {
                 case Not:
@@ -352,7 +375,6 @@ bool parseLogicalExpression(bool *isError,
                     int count = (tokenEnd - tokenStart) + 1;
                     char *varName = NULL;
                             varName = calloc(1, (size_t) count + 1);
-//                            varName = malloc((size_t) count);
                     strncpy(varName, line + tokenStart, (size_t) count);
                     if (isTrueStr(line, tokenStart)) {
                         newNode->value = true;
@@ -384,9 +406,6 @@ bool parseLogicalExpression(bool *isError,
     bool result = resolveNode(rootNode);
 
     freeNodeTree(rootNode);
-
-//    printf("\n");
-//    printf("result %d \n", result);
 
     freeDictTree(*dict);
     dictDealloc(dict);
@@ -456,26 +475,21 @@ bool resolveNode(node_t *node) {
         case Identifier:
             return node->value;
         case Not:
-//            printf("Not \n");
             return !resolveNode(node->primaryChild);
         case And:
-//            printf("And \n");
             r = resolveNode(node->secondaryChild);
             l = resolveNode(node->primaryChild);
             return r && l;
         case Or:
-//            printf("Or \n");
             r = resolveNode(node->secondaryChild);
             l = resolveNode(node->primaryChild);
             return r || l;
         case Xor:
-//            printf("Xor \n");
             r = resolveNode(node->secondaryChild);
             l = resolveNode(node->primaryChild);
             return r ^ l;
         case Brackets:
         case ClosedBrackets:
-//            printf("Brackets \n");
             return resolveNode(node->primaryChild);
     }
     return false;
@@ -506,10 +520,7 @@ void removeRedundantSpaces(char *line, bool removeAll) {
 //
 //};
 
-// todo: add check rules: "a a a ", "and and and", "a and and", "and not and", "a a and a", "and a and a"
 bool isExpressionValid(char *line) {
-
-//    return true;
 
     size_t len = strlen(line);
     if(len <= 1){
@@ -557,7 +568,8 @@ bool isExpressionValid(char *line) {
                    && line[tokenEnd+1] != ')'
                    && line[tokenEnd+1] != '\0'
                    && line[tokenEnd+1] != '\n'
-                   && line[tokenEnd+1] != ';') {
+                   && line[tokenEnd+1] != ';'
+                   && line[tokenEnd+1] != '=') {
                 tokenEnd++;
             }
 
@@ -619,101 +631,6 @@ bool isExpressionValid(char *line) {
         i++;
     }
 
-//    int bracketsCount = 0;
-//
-//    int prevCharIndex = 0;
-//    int nextCharIndex = 0;
-//
-//    int start, end = 0;
-//
-//    int i = 0;
-//    while (line[i] != '\0' && line[i] != '\n' && line[i] != ';') {
-//
-//        switch (line[i]) {
-//            case ' ':
-//                while (line[i + 1] == ' ') {
-//                    i++;
-//                }
-//                break;
-//            case '(':
-//                if (i != 0) {
-//                    prevCharIndex = i - 1;
-//                    if (line[prevCharIndex] == ' ') {
-//                        prevCharIndex--;
-//                    }
-//                    int operType = getOperatorType(line, -1, prevCharIndex);
-//                    if(operType == -1 || operType == Identifier){
-//                        return false;
-//                    }
-////                    if (!isOperator(line, -1, prevChar)) {
-////                        return false;
-////                    }
-//                }
-//                bracketsCount++;
-//                break;
-//            case ')':
-//                if (bracketsCount >= 1) {
-//                    bracketsCount--;
-//                } else {
-//                    return false;
-//                }
-//                prevCharIndex = i - 1;
-//                nextCharIndex = i + 1;
-//                if (line[prevCharIndex] == ' ') {
-//                    prevCharIndex--;
-//                }
-//                if (line[nextCharIndex] == ' ') {
-//                    nextCharIndex++;
-//                }
-//                int operType = getOperatorType(line, nextCharIndex, -1);
-//                int operType2 = getOperatorType(line, -1, prevCharIndex);
-//                if(operType == -1 || operType == Identifier || operType2 == -1 || operType2 == Identifier ){
-//                    return false;
-//                }
-////                if (!isOperator(line, nextChar, -1) || isOperator(line, -1, prevChar)) {
-////                    return false;
-////                }
-//                break;
-//            default:
-//                if (isLowLetter(line[i]) == false &&
-//                    line[i] != 'T' &&
-//                    line[i] != 'F') {
-//                    return false;
-//                } else {
-//                    start = i;
-//                    end = i;
-//                    while ((line[start - 1] != ' '
-//                            && line[start - 1] != '('
-//                            && line[start - 1] != ')')
-//                           && start > 0) {
-//                        start--;
-//                    }
-//                    while (
-//                            (
-//                                    line[end + 1] != ' '
-//                                    && line[end + 1] != '('
-//                                    && line[end + 1] != ')'
-//                            )
-//                            &&
-//                            (
-//                                    line[end + 1] != '\0'
-//                                    && line[end + 1] != '\n'
-//                                    && line[end + 1] != ';'
-//                            )
-//                            ) {
-//                        end++;
-//                    }
-//                    if (!isVarName(line, start, end)
-//                        && !isTrueStr(line, start)
-//                        && !isFalseStr(line, start)) {
-//                        return false;
-//                    }
-//                }
-//                break;
-//        }
-//
-//        i++;
-//    }
 
     if (bracketsCount != 0) {
         return false;
@@ -835,10 +752,6 @@ bool isAssignmentValid(char *line) {
     return true;
 }
 
-//bool execCommand(bool a, bool b, int operator) {
-//
-//};
-
 /**
  * Get operator's priority
  * @param operator
@@ -862,7 +775,3 @@ int getPriority(int operator) {
             break;
     }
 };
-
-//bool calcLogicalExpression(bool *isError, char *expression, int size) {
-//
-//};
