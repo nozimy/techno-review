@@ -8,70 +8,6 @@
 #include <string.h>
 #include <sys/types.h>
 
-
-// =============================== MAP
-
-typedef struct dict_t_struct {
-    char *key;
-    bool value;
-    struct dict_t_struct *next;
-} dict_t;
-
-dict_t **dictAlloc(void) {
-    return calloc(1, sizeof(dict_t));
-}
-
-void dictDealloc(dict_t **dict) {
-    free(dict);
-}
-
-bool getItem(dict_t *dict, char *key) {
-    dict_t *ptr;
-    for (ptr = dict; ptr != NULL; ptr = ptr->next) {
-        if (strcmp(ptr->key, key) == 0) {
-            return ptr->value;
-        }
-    }
-
-    return NULL;
-}
-
-void delItem(dict_t **dict, char *key) {
-    dict_t *ptr, *prev;
-    for (ptr = *dict, prev = NULL; ptr != NULL; prev = ptr, ptr = ptr->next) {
-        if (strcmp(ptr->key, key) == 0) {
-            if (ptr->next != NULL) {
-                if (prev == NULL) {
-                    *dict = ptr->next;
-                } else {
-                    prev->next = ptr->next;
-                }
-            } else if (prev != NULL) {
-                prev->next = NULL;
-            } else {
-                *dict = NULL;
-            }
-
-            free(ptr->key);
-            free(ptr);
-
-            return;
-        }
-    }
-}
-
-void addItem(dict_t **dict, char *key, bool value) {
-    delItem(dict, key); /* If we already have a item with this key, delete it. */
-    dict_t *d = malloc(sizeof(struct dict_t_struct));
-    d->key = malloc(strlen(key) + 1);
-    strcpy(d->key, key);
-    d->value = value;
-    d->next = *dict;
-    *dict = d;
-}
-//===================================================
-
-
 /**
  * Задача B-5. Парсер, логические выражения.
  *
@@ -111,11 +47,34 @@ void addItem(dict_t **dict, char *key, bool value) {
  *
  */
 
+typedef struct dict_t_struct {
+    char *key;
+    bool value;
+    struct dict_t_struct *next;
+} dict_t;
+
+dict_t **dictAlloc(void);
+void dictDealloc(dict_t **dict);
+int getItem(dict_t *dict, char *key);
+void delItem(dict_t **dict, char *key);
+void addItem(dict_t **dict, char *key, bool value);
+
+
+enum Operators {
+    Or, Xor, And, Not, Brackets, ClosedBrackets, Identifier
+};
+
+typedef struct Node {
+    enum Operators operator;
+    bool value;
+    struct Node *primaryChild;
+    struct Node *secondaryChild;
+} node_t;
+
 int runParser();
 
-bool parseLogicalExpression();
-
-//int checkLineType(char *);
+bool parseLogicalExpression(bool *isError,
+                            char *line, dict_t **dict);
 
 bool isExpressionValid(char *);
 
@@ -137,34 +96,27 @@ bool isFalseStr(char *, int);
 
 int findElemInArr(char *, char);
 
-
-enum Operators {
-    Or, Xor, And, Not, Brackets, ClosedBrackets, Identifier
-};
-
-typedef struct Node {
-    enum Operators operator;
-    bool value;
-    struct Node *primaryChild;
-    struct Node *secondaryChild;
-} node_t;
-
 bool resolveNode(node_t *);
 
 void insertNode(node_t **rootNode, node_t *newNode);
 
 int getOperatorType(char *line, int, int);
 
+void freeDictTree(dict_t *dict);
+
+void addVar(dict_t **dict, char *assignLine);
+
+static const int ERROR = -1;
+
 int main(void) {
     int errorCode = runParser();
 
-    if (errorCode != 0) {
+    if (errorCode == ERROR) {
         printf("[error]");
     }
 
     return 0;
 }
-
 
 /**
  *  Парсер логических выражений:
@@ -174,102 +126,55 @@ int main(void) {
  */
 int runParser() {
 
-    // todo: Read lines to array
-    char *line1 = NULL;
-    size_t line1Length = 0;
-    char *line2 = NULL;
-    size_t line2Length = 0;
-    char *line3 = NULL;
-    size_t line3Length = 0;
-
-    ssize_t charNum1 = getline(&line1, &line1Length, stdin);
-//    printf("%s \n", line1);
-//    printf("%c \n", line1[charNum1-2]);
-//    printf("%zu \n", line1Length);
-//    printf("%zd \n", charNum1);
-    if (line1[charNum1-2] == ';') {
-        ssize_t charNum2 = getline(&line2, &line2Length, stdin);
-        if (line1[charNum2-2] == ';') {
-            ssize_t charNum3 = getline(&line3, &line3Length, stdin); // todo: not used - remove warning
+    dict_t **dict = dictAlloc();
+    char *line = NULL;
+    size_t lineLength = 0;
+    ssize_t charsCount = 0;
+    do {
+        charsCount = getline(&line, &lineLength, stdin);
+        if (line == NULL || charsCount == -1){
+            freeIfNotNull(line);
+            return ERROR;
         }
-    }
+        removeRedundantSpaces(line, false);
+        if (isAssignmentValid(line)) {
+            addVar(dict, line);
+        } else if (isExpressionValid(line)) {
+            bool isError = false;
+            bool result = parseLogicalExpression(&isError, line, dict);
+            if (isError) {
+                freeIfNotNull(line);
+                freeDictTree(*dict);
+                dictDealloc(dict);
+                return ERROR;
+            }
 
+            if (result) {
+                printf("True");
+            } else {
+                printf("False");
+            }
 
+        } else {
+            freeIfNotNull(line);
+            freeDictTree(*dict);
+            dictDealloc(dict);
+            return ERROR;
+        }
+    } while (charsCount > 0 && line[charsCount-2] == ';');
 
-//    if (line1 == NULL || line2 == NULL || line3 == NULL
-//        || charNum1 == -1 || charNum2 == -1 || charNum3 == -1) {
-//        freeIfNotNull(line1);
-//        freeIfNotNull(line2);
-//        freeIfNotNull(line3);
-//        return -1;
-//    }
-
-
-//    removeRedundantSpaces(line1, true);
-//    removeRedundantSpaces(line2, true);
-//    removeRedundantSpaces(line3, false);
-//
-//    if (!isAssignmentValid(line1)
-//        || !isAssignmentValid(line2)
-//        || !isExpressionValid(line3)) {
-//
-//        freeIfNotNull(line1);
-//        freeIfNotNull(line2);
-//        freeIfNotNull(line3);
-//        return -1;
-//    }
-
-    bool isError = false;
-    bool result = parseLogicalExpression(&isError, line1,
-                                         line2, line3);
-
-    if (isError) {
-        freeIfNotNull(line1);
-        freeIfNotNull(line2);
-        freeIfNotNull(line3);
-        return -1;
-    }
-
-    if (result == true) {
-        printf("True");
-    } else {
-        printf("False");
-    }
-
-    freeIfNotNull(line1);
-    freeIfNotNull(line2);
-    freeIfNotNull(line3);
+    freeIfNotNull(line);
+    freeDictTree(*dict);
+    dictDealloc(dict);
 
     return 0;
 };
 
-void addVar(dict_t **dict, char *assignLine){
-
-    if (strlen(assignLine) <= 1){
-        return;
-    }
-    int assignOperatorIndex = findElemInArr(assignLine, '=');
-
-
-    char *var1 = NULL;
-           var1 = calloc(1, (size_t) assignOperatorIndex + 1);
-    strncpy(var1, assignLine, (size_t) assignOperatorIndex);
-    bool val = false;
-    if (isTrueStr(assignLine, assignOperatorIndex + 1)) {
-        val = true;
-    } else if (isFalseStr(assignLine, assignOperatorIndex + 1)) {
-        val = false;
-    }
-    addItem(dict, var1, val);
-
-    free(var1);
-
-}
-
 void freeNodeTree(node_t *rootNode){
+
     if (rootNode != NULL){
         freeNodeTree(rootNode->primaryChild);
-        free(rootNode->secondaryChild);
+        freeNodeTree(rootNode->secondaryChild);
         free(rootNode);
     }
 }
@@ -282,66 +187,57 @@ void freeDictTree(dict_t *dict){
     }
 }
 
-bool parseLogicalExpression(bool *isError,
-                            char *line1,
-                            char *line2,
-                            char *line) {
+bool increaseStackMemory(node_t*** braces, size_t* allocSize) {
 
-//    *isError = true;
+    *allocSize *= 2;
 
-    dict_t **dict = dictAlloc();
+    node_t** _braces = (node_t**)realloc(*braces, *allocSize * sizeof(node_t**));
 
-//    removeRedundantSpaces(line1, false);
-    if(isAssignmentValid(line1)){
-        addVar(dict, line1);
+    if (_braces != NULL) {
+
+        *braces = _braces;
+        return true;
+
     } else {
-        removeRedundantSpaces(line1, false);
-        if (isExpressionValid(line1)){
-            line = line1;
-        } else {
-            *isError = true;
-        }
-    }
-
-//    removeRedundantSpaces(line2, false);
-    if(isAssignmentValid(line2)){
-        addVar(dict, line2);
-    } else {
-        removeRedundantSpaces(line2, false);
-        if (isExpressionValid(line2)){
-            line = line2;
-        } else {
-            *isError = true;
-        }
-    }
-
-
-    removeRedundantSpaces(line, false);
-    if (!isExpressionValid(line)){
-        *isError = true;
+        free(*braces);
         return false;
     }
+}
 
-//    addVar(dict, line1);
-//    addVar(dict, line2);
+bool parseLogicalExpression(bool *isError,
+                            char *line, dict_t **dict) {
 
     node_t *rootNode = NULL;
+    node_t *newNode = NULL;
+
+    size_t allocSize = 16;
+    node_t** braces = (node_t**)malloc(allocSize * sizeof(node_t**));
+    size_t bracesCount = 0;
 
     int i = 0;
     while (line[i] != '\0' && line[i] != '\n' && line[i] != ';') {
         int tokenStart = i;
         int tokenEnd = i;
 
+        if (bracesCount == allocSize) {
+            if (!increaseStackMemory(&braces, &allocSize)) {
+                *isError = true;
+                return ERROR;
+            }
+        }
 
         if (line[i] == '(') {
-            node_t *newNode = NULL;
             newNode = calloc(1, sizeof(node_t));
-            newNode->operator = Brackets;
 
+            newNode->operator = Brackets;
             insertNode(&rootNode, newNode);
 
+            braces[bracesCount] = newNode;
+            bracesCount++;
         } else if (line[i] == ')') {
-            rootNode->operator = ClosedBrackets;
+            bracesCount--;
+            braces[bracesCount]->operator = ClosedBrackets;
+
         } else if (line[i] != ' ') {
             tokenStart = i;
             tokenEnd = i;
@@ -354,7 +250,6 @@ bool parseLogicalExpression(bool *isError,
                 tokenEnd++;
             }
 
-            node_t *newNode = NULL;
             newNode = calloc(1, sizeof(node_t));
 
             switch (getOperatorType(line, tokenStart, -1)) {
@@ -381,7 +276,19 @@ bool parseLogicalExpression(bool *isError,
                     } else if(isFalseStr(line, tokenStart)) {
                         newNode->value = false;
                     } else {
-                        newNode->value = getItem(*dict, varName);
+                        int item = getItem(*dict, varName);
+                        if (item == ERROR){
+                            *isError = true;
+                            free(varName);
+                            free(newNode);
+                            free(braces);
+                            freeNodeTree(rootNode);
+                            return ERROR;
+                        } else if (item == 1){
+                            newNode->value = true;
+                        } else {
+                            newNode->value = false;
+                        }
                     }
                     free(varName);
                     break;
@@ -396,7 +303,6 @@ bool parseLogicalExpression(bool *isError,
 
             }
             insertNode(&rootNode, newNode);
-
             i = tokenEnd;
         }
 
@@ -405,13 +311,35 @@ bool parseLogicalExpression(bool *isError,
 
     bool result = resolveNode(rootNode);
 
+    free(braces);
     freeNodeTree(rootNode);
-
-    freeDictTree(*dict);
-    dictDealloc(dict);
 
     return result;
 };
+
+
+void addVar(dict_t **dict, char *assignLine){
+
+    if (strlen(assignLine) <= 1){
+        return;
+    }
+    int assignOperatorIndex = findElemInArr(assignLine, '=');
+
+
+    char *var1 = NULL;
+    var1 = calloc(1, (size_t) assignOperatorIndex + 1);
+    strncpy(var1, assignLine, (size_t) assignOperatorIndex);
+    bool val = false;
+    if (isTrueStr(assignLine, assignOperatorIndex + 1)) {
+        val = true;
+    } else if (isFalseStr(assignLine, assignOperatorIndex + 1)) {
+        val = false;
+    }
+    addItem(dict, var1, val);
+
+    free(var1);
+
+}
 
 void insertNode(node_t **rootNode1, node_t *newNode) {
     node_t *rootNode = *rootNode1;
@@ -419,9 +347,9 @@ void insertNode(node_t **rootNode1, node_t *newNode) {
     node = rootNode;
 
     if (rootNode != NULL && rootNode->operator == Brackets) {
-        node = rootNode->primaryChild;
+        insertNode(&rootNode->primaryChild, newNode);
+        return;
     }
-
 
     if (!node) {
         node = newNode;
@@ -429,8 +357,10 @@ void insertNode(node_t **rootNode1, node_t *newNode) {
 
         if (node->primaryChild == NULL) {
             node->primaryChild = newNode;
-        } else {
+        }else if (node->secondaryChild == NULL){
             node->secondaryChild = newNode;
+        } else {
+            insertNode(&node->secondaryChild, newNode);
         }
     } else {
         if (node->operator == Identifier) {
@@ -438,7 +368,7 @@ void insertNode(node_t **rootNode1, node_t *newNode) {
             newNode->primaryChild = node;
             node = newNode;
         } else {
-            if (getPriority(node->operator) > getPriority(newNode->operator)) {
+            if (getPriority(node->operator) >= getPriority(newNode->operator)) {
 
                 newNode->primaryChild = node;
                 node = newNode;
@@ -446,8 +376,10 @@ void insertNode(node_t **rootNode1, node_t *newNode) {
 
                 if (node->primaryChild == NULL) {
                     node->primaryChild = newNode;
-                } else {
+                } else if (node->secondaryChild == NULL){
                     node->secondaryChild = newNode;
+                } else {
+                    insertNode(&node->secondaryChild, newNode);
                 }
             }
         }
@@ -515,10 +447,6 @@ void removeRedundantSpaces(char *line, bool removeAll) {
 
     *i = 0;
 }
-
-//int checkLineType(char *line) {
-//
-//};
 
 bool isExpressionValid(char *line) {
 
@@ -619,7 +547,6 @@ bool isExpressionValid(char *line) {
                 default:
                     // если слово не является ни оператором или переменной или константой
                     return false;
-                    break;
 
             }
 
@@ -690,7 +617,7 @@ bool isFalseStr(char *line, int firstIndex) {
 
 bool isVarName(char *line, int firstIndex, int lastIndex) {
     for (int i = firstIndex; i <= lastIndex; i++) {
-        if (isLowLetter(line[i]) == false) {
+        if (!isLowLetter(line[i])) {
             return false;
         };
     }
@@ -739,7 +666,7 @@ bool isAssignmentValid(char *line) {
         return false;
     }
 
-    if (isVarName(line, 0, assignOperatorIndex - 1) == false) {
+    if (!isVarName(line, 0, assignOperatorIndex - 1)) {
         return false;
     }
 
@@ -772,6 +699,65 @@ int getPriority(int operator) {
             return 4;
         default:
             return -1;
-            break;
     }
 };
+
+
+// =============================== MAP
+
+dict_t **dictAlloc(void) {
+    return calloc(1, sizeof(dict_t));
+}
+
+void dictDealloc(dict_t **dict) {
+    free(dict);
+}
+
+int getItem(dict_t *dict, char *key) {
+    dict_t *ptr;
+    for (ptr = dict; ptr != NULL; ptr = ptr->next) {
+        if (strcmp(ptr->key, key) == 0) {
+            if(ptr->value){
+                return 1;
+            }
+            return 0;
+        }
+    }
+
+    return ERROR;
+}
+
+void delItem(dict_t **dict, char *key) {
+    dict_t *ptr, *prev;
+    for (ptr = *dict, prev = NULL; ptr != NULL; prev = ptr, ptr = ptr->next) {
+        if (strcmp(ptr->key, key) == 0) {
+            if (ptr->next != NULL) {
+                if (prev == NULL) {
+                    *dict = ptr->next;
+                } else {
+                    prev->next = ptr->next;
+                }
+            } else if (prev != NULL) {
+                prev->next = NULL;
+            } else {
+                *dict = NULL;
+            }
+
+            free(ptr->key);
+            free(ptr);
+
+            return;
+        }
+    }
+}
+
+void addItem(dict_t **dict, char *key, bool value) {
+    delItem(dict, key); /* Если у нас уже есть элемент с такми ключом, то удалим его. */
+    dict_t *d = malloc(sizeof(struct dict_t_struct));
+    d->key = malloc(strlen(key) + 1);
+    strcpy(d->key, key);
+    d->value = value;
+    d->next = *dict;
+    *dict = d;
+}
+//===================================================
